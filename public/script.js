@@ -1,5 +1,5 @@
 /* =========================================================================
-   Capitaliza - Simulador de Renda Fixa
+   cofringold - Simulador de Renda Fixa
    JavaScript puro (ES moderno), sem dependencias externas.
 
    Organizado em modulos internos dentro de uma IIFE para nao poluir o escopo
