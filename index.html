@@ -1,0 +1,537 @@
+<!DOCTYPE html>
+<html lang="pt-BR" data-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="color-scheme" content="dark light">
+  <meta name="theme-color" content="#0a0c10">
+  <meta name="description" content="Simuladores de investimento: renda fixa brasileira (CDB, LCI, LCA, Tesouro IPCA+, prefixado) com IR, IOF e FGC, e calculadora de juros compostos e simples com aportes ou retiradas mensais e gráficos.">
+  <title>Capitaliza · Simuladores de Investimento</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <!-- Região exclusiva para leitores de tela: anuncia o resumo a cada recálculo -->
+  <p class="sr-only" id="live-summary" aria-live="polite"></p>
+
+  <header class="app-header">
+    <a class="brand" href="#main">
+      <span class="brand__mark" aria-hidden="true">
+        <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M4 17.5 L9.5 11 L13.5 14 L20 6.5"></path>
+          <path d="M15.5 6.5 L20 6.5 L20 11"></path>
+        </svg>
+      </span>
+      <span class="brand__text">
+        <span class="brand__name">Capitaliza</span>
+        <span class="brand__sub">Simuladores de Investimento</span>
+      </span>
+    </a>
+
+    <button type="button" class="theme-toggle" id="theme-toggle" aria-label="Alternar entre tema claro e escuro">
+      <span class="theme-toggle__icon" aria-hidden="true"></span>
+      <span class="theme-toggle__label" id="theme-toggle-label">Claro</span>
+    </button>
+  </header>
+
+  <nav class="tabs" role="tablist" aria-label="Calculadoras">
+    <button type="button" class="tab is-active" id="tab-rendafixa" role="tab" aria-selected="true" aria-controls="view-rendafixa">Renda Fixa</button>
+    <button type="button" class="tab" id="tab-juros" role="tab" aria-selected="false" aria-controls="view-juros" tabindex="-1">Juros Compostos</button>
+    <button type="button" class="tab" id="tab-comparador" role="tab" aria-selected="false" aria-controls="view-comparador" tabindex="-1">Comparador</button>
+  </nav>
+
+  <main id="main">
+
+    <!-- ===================================================================
+         ABA 1: RENDA FIXA
+         =================================================================== -->
+    <div class="view layout is-active" id="view-rendafixa" role="tabpanel" aria-labelledby="tab-rendafixa">
+
+      <form class="panel" id="simulator-form" novalidate>
+        <header class="panel__head">
+          <h1 class="panel__title">Renda fixa</h1>
+          <p class="panel__hint">Escolha o papel, informe a taxa e os aportes. O cálculo aplica as regras de imposto de cada investimento.</p>
+        </header>
+
+        <fieldset class="field">
+          <legend class="field__legend">Tipo de investimento</legend>
+          <div class="segmented segmented--wrap" role="radiogroup" aria-label="Tipo de investimento" id="instrument-group">
+            <label class="segment"><input type="radio" name="instrument" value="cdb" checked><span class="segment__face">CDB</span></label>
+            <label class="segment"><input type="radio" name="instrument" value="lci"><span class="segment__face">LCI</span></label>
+            <label class="segment"><input type="radio" name="instrument" value="lca"><span class="segment__face">LCA</span></label>
+            <label class="segment"><input type="radio" name="instrument" value="tesouro_ipca"><span class="segment__face">Tesouro IPCA+</span></label>
+            <label class="segment"><input type="radio" name="instrument" value="pre"><span class="segment__face">Prefixado</span></label>
+          </div>
+          <p class="field__help" id="instrument-help"></p>
+        </fieldset>
+
+        <fieldset class="field">
+          <legend class="field__legend">Indexador</legend>
+          <div class="segmented" role="radiogroup" aria-label="Indexador" id="indexer-group"></div>
+        </fieldset>
+
+        <div class="field">
+          <label class="field__label" for="rate-input" id="rate-label">Percentual do CDI</label>
+          <div class="affix-input">
+            <input class="control" id="rate-input" type="text" inputmode="decimal" autocomplete="off" value="110" aria-describedby="rate-help">
+            <span class="affix affix--suffix" id="rate-suffix">% do CDI</span>
+          </div>
+          <p class="field__help" id="rate-help">Quanto o papel rende em relação ao CDI.</p>
+        </div>
+
+        <div class="field-row">
+          <div class="field">
+            <label class="field__label" for="initial-input">Valor inicial</label>
+            <div class="affix-input">
+              <span class="affix affix--prefix">R$</span>
+              <input class="control control--money" id="initial-input" type="text" inputmode="numeric" autocomplete="off" value="1.000,00">
+            </div>
+          </div>
+          <div class="field">
+            <label class="field__label" for="monthly-input">Aporte mensal</label>
+            <div class="affix-input">
+              <span class="affix affix--prefix">R$</span>
+              <input class="control control--money" id="monthly-input" type="text" inputmode="numeric" autocomplete="off" value="500,00">
+            </div>
+          </div>
+        </div>
+
+        <div class="field">
+          <label class="field__label" for="years-input">Período de aplicação</label>
+          <div class="years">
+            <input class="years__range" id="years-range" type="range" min="1" max="40" step="1" value="5" aria-label="Período em anos (controle deslizante)">
+            <div class="affix-input affix-input--compact">
+              <input class="control" id="years-input" type="number" min="1" max="40" step="1" value="5" aria-label="Período em anos">
+              <span class="affix affix--suffix">anos</span>
+            </div>
+          </div>
+          <p class="field__help" id="term-help"></p>
+        </div>
+
+        <details class="assumptions">
+          <summary class="assumptions__summary">
+            <span>Taxas de referência</span>
+            <span class="assumptions__caret" aria-hidden="true"></span>
+          </summary>
+          <div class="assumptions__body">
+            <div class="field-row">
+              <div class="field">
+                <label class="field__label" for="cdi-input">CDI ao ano</label>
+                <div class="affix-input">
+                  <input class="control" id="cdi-input" type="text" inputmode="decimal" autocomplete="off" value="14,40">
+                  <span class="affix affix--suffix">%</span>
+                </div>
+              </div>
+              <div class="field">
+                <label class="field__label" for="ipca-input">IPCA ao ano</label>
+                <div class="affix-input">
+                  <input class="control" id="ipca-input" type="text" inputmode="decimal" autocomplete="off" value="4,50">
+                  <span class="affix affix--suffix">%</span>
+                </div>
+              </div>
+            </div>
+            <p class="field__help">
+              Selic em 14,50% a.a. (Copom, jun/2026). O CDI fica logo abaixo da Selic.
+              Valores editáveis: confirme as taxas vigentes antes de decidir.
+            </p>
+          </div>
+        </details>
+      </form>
+
+      <section class="results" aria-label="Resultado da simulação">
+        <div class="metrics" id="metrics">
+          <article class="metric metric--primary">
+            <span class="metric__label">Valor total líquido</span>
+            <strong class="metric__value" id="m-net-total">R$ 0,00</strong>
+            <span class="metric__foot" id="m-net-rate">no resgate, após impostos</span>
+          </article>
+          <article class="metric">
+            <span class="metric__label">Total investido</span>
+            <strong class="metric__value" id="m-invested">R$ 0,00</strong>
+            <span class="metric__foot" id="m-invested-foot">aportes acumulados</span>
+          </article>
+          <article class="metric">
+            <span class="metric__label">Juros líquido</span>
+            <strong class="metric__value metric__value--accent" id="m-net-yield">R$ 0,00</strong>
+            <span class="metric__foot" id="m-net-yield-foot">rendimento após impostos</span>
+          </article>
+        </div>
+
+        <article class="card chart-card">
+          <header class="card__head">
+            <div>
+              <h2 class="card__title">Evolução do patrimônio</h2>
+              <p class="card__sub" id="area-caption">Aportes e juros acumulados mês a mês.</p>
+            </div>
+            <div class="segmented segmented--sm" role="radiogroup" aria-label="Modo de visualização" id="mode-group">
+              <label class="segment"><input type="radio" name="mode" value="net" checked><span class="segment__face">Líquido</span></label>
+              <label class="segment"><input type="radio" name="mode" value="gross"><span class="segment__face">Bruto</span></label>
+            </div>
+          </header>
+
+          <div class="legend">
+            <span class="legend__item"><span class="legend__swatch legend__swatch--principal"></span>Valor investido</span>
+            <span class="legend__item"><span class="legend__swatch legend__swatch--yield"></span>Juros</span>
+          </div>
+
+          <div class="chart" id="area-chart">
+            <svg class="chart__svg" id="area-svg" role="img" aria-labelledby="area-svg-title"></svg>
+            <span class="sr-only" id="area-svg-title"></span>
+            <div class="tooltip" id="area-tooltip" role="status" hidden></div>
+          </div>
+        </article>
+
+        <div class="results-grid">
+          <article class="card">
+            <header class="card__head card__head--stack">
+              <h2 class="card__title">No resgate</h2>
+              <p class="card__sub">Como o valor bruto se divide ao final do período.</p>
+            </header>
+
+            <div class="composition">
+              <div class="donut">
+                <svg class="donut__svg" viewBox="0 0 120 120" role="img" aria-labelledby="donut-title">
+                  <span class="sr-only" id="donut-title"></span>
+                  <circle class="donut__track" cx="60" cy="60" r="48"></circle>
+                  <circle class="donut__seg donut__seg--principal" id="seg-principal" cx="60" cy="60" r="48"></circle>
+                  <circle class="donut__seg donut__seg--yield" id="seg-yield" cx="60" cy="60" r="48"></circle>
+                  <circle class="donut__seg donut__seg--tax" id="seg-tax" cx="60" cy="60" r="48"></circle>
+                </svg>
+                <div class="donut__center">
+                  <span class="donut__center-label">Líquido</span>
+                  <strong class="donut__center-value" id="donut-center">R$ 0</strong>
+                </div>
+              </div>
+
+              <dl class="ledger">
+                <div class="ledger__row"><dt><span class="dot dot--principal"></span>Valor investido</dt><dd id="led-invested">R$ 0,00</dd></div>
+                <div class="ledger__row"><dt><span class="dot dot--yield"></span>Juros bruto</dt><dd id="led-gross-yield">R$ 0,00</dd></div>
+                <div class="ledger__row ledger__row--tax"><dt><span class="dot dot--tax"></span>Imposto de Renda</dt><dd id="led-ir">R$ 0,00</dd></div>
+                <div class="ledger__row ledger__row--tax"><dt><span class="dot dot--tax"></span>IOF</dt><dd id="led-iof">R$ 0,00</dd></div>
+                <div class="ledger__row ledger__row--total"><dt>Valor líquido</dt><dd id="led-net">R$ 0,00</dd></div>
+              </dl>
+            </div>
+
+            <ul class="rules" id="rules" aria-label="Regras do investimento"></ul>
+          </article>
+
+          <article class="card">
+            <header class="card__head card__head--stack">
+              <h2 class="card__title">Comparação entre papéis</h2>
+              <p class="card__sub">Mesmo rendimento bruto, imposto diferente. Quanto sobra líquido em cada um.</p>
+            </header>
+
+            <div class="bars" id="bars"></div>
+
+            <aside class="insight">
+              <span class="insight__tag">Equivalência</span>
+              <p class="insight__text" id="insight-text"></p>
+            </aside>
+          </article>
+        </div>
+
+        <details class="card breakdown">
+          <summary class="breakdown__summary">
+            <span>Detalhe ano a ano</span>
+            <span class="assumptions__caret" aria-hidden="true"></span>
+          </summary>
+          <div class="breakdown__scroll">
+            <table class="table">
+              <thead>
+                <tr>
+                  <th scope="col">Ano</th>
+                  <th scope="col">Investido</th>
+                  <th scope="col">Juros no ano</th>
+                  <th scope="col">Saldo bruto</th>
+                  <th scope="col">Saldo líquido</th>
+                </tr>
+              </thead>
+              <tbody id="year-table-body"></tbody>
+            </table>
+          </div>
+        </details>
+      </section>
+    </div>
+
+    <!-- ===================================================================
+         ABA 2: JUROS COMPOSTOS E SIMPLES
+         =================================================================== -->
+    <div class="view layout" id="view-juros" role="tabpanel" aria-labelledby="tab-juros">
+
+      <form class="panel" id="juros-form" novalidate>
+        <header class="panel__head">
+          <h1 class="panel__title">Juros compostos</h1>
+          <p class="panel__hint">Projete o crescimento de uma aplicação com aportes ou retiradas mensais, em juros compostos ou simples.</p>
+        </header>
+
+        <fieldset class="field">
+          <legend class="field__legend">Tipo de cálculo</legend>
+          <div class="segmented" role="radiogroup" aria-label="Tipo de cálculo" id="ji-type">
+            <label class="segment"><input type="radio" name="ji-type" value="compostos" checked><span class="segment__face">Compostos</span></label>
+            <label class="segment"><input type="radio" name="ji-type" value="simples"><span class="segment__face">Simples</span></label>
+          </div>
+        </fieldset>
+
+        <fieldset class="field">
+          <legend class="field__legend">Movimentação mensal</legend>
+          <div class="segmented" role="radiogroup" aria-label="Movimentação mensal" id="ji-flow">
+            <label class="segment"><input type="radio" name="ji-flow" value="aporte" checked><span class="segment__face">Aportar</span></label>
+            <label class="segment"><input type="radio" name="ji-flow" value="retirada"><span class="segment__face">Retirar</span></label>
+          </div>
+          <p class="field__help" id="ji-flow-help">Aporte: você deposita todo mês. Retirada: você saca todo mês a partir do valor inicial.</p>
+        </fieldset>
+
+        <div class="field-row">
+          <div class="field">
+            <label class="field__label" for="ji-initial">Valor inicial</label>
+            <div class="affix-input">
+              <span class="affix affix--prefix">R$</span>
+              <input class="control control--money" id="ji-initial" type="text" inputmode="numeric" autocomplete="off" value="1.000,00">
+            </div>
+          </div>
+          <div class="field">
+            <label class="field__label" for="ji-monthly" id="ji-monthly-label">Valor mensal</label>
+            <div class="affix-input">
+              <span class="affix affix--prefix">R$</span>
+              <input class="control control--money" id="ji-monthly" type="text" inputmode="numeric" autocomplete="off" value="100,00">
+            </div>
+          </div>
+        </div>
+
+        <div class="field-row field-row--stack">
+          <div class="field">
+            <label class="field__label" for="ji-rate">Taxa de juros</label>
+            <div class="combo">
+              <div class="affix-input">
+                <span class="affix affix--prefix">%</span>
+                <input class="control" id="ji-rate" type="text" inputmode="decimal" autocomplete="off" value="14,79">
+              </div>
+              <select class="control select" id="ji-rate-unit" aria-label="Período da taxa de juros">
+                <option value="anual" selected>anual</option>
+                <option value="mensal">mensal</option>
+              </select>
+            </div>
+          </div>
+          <div class="field">
+            <label class="field__label" for="ji-period">Período</label>
+            <div class="combo">
+              <input class="control" id="ji-period" type="number" min="1" max="600" step="1" value="12" aria-label="Quantidade do período">
+              <select class="control select" id="ji-period-unit" aria-label="Unidade do período">
+                <option value="anos" selected>ano(s)</option>
+                <option value="meses">mês(es)</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <div class="actions">
+          <button type="submit" class="btn btn--primary" id="ji-calc">Calcular</button>
+          <button type="button" class="btn btn--ghost" id="ji-clear">Limpar</button>
+        </div>
+      </form>
+
+      <section class="results" aria-label="Resultado dos juros">
+        <div class="metrics">
+          <article class="metric metric--primary">
+            <span class="metric__label" id="ji-m1-label">Valor total final</span>
+            <strong class="metric__value" id="ji-m1">R$ 0,00</strong>
+            <span class="metric__foot" id="ji-m1-foot"></span>
+          </article>
+          <article class="metric">
+            <span class="metric__label" id="ji-m2-label">Total investido</span>
+            <strong class="metric__value" id="ji-m2">R$ 0,00</strong>
+            <span class="metric__foot" id="ji-m2-foot"></span>
+          </article>
+          <article class="metric">
+            <span class="metric__label" id="ji-m3-label">Total em juros</span>
+            <strong class="metric__value metric__value--accent" id="ji-m3">R$ 0,00</strong>
+            <span class="metric__foot" id="ji-m3-foot"></span>
+          </article>
+        </div>
+
+        <article class="card chart-card">
+          <header class="card__head card__head--stack">
+            <h2 class="card__title">Evolução do montante</h2>
+            <p class="card__sub" id="ji-chart-sub">Crescimento mês a mês.</p>
+          </header>
+          <div class="legend" id="ji-legend"></div>
+          <div class="chart" id="juros-chart">
+            <svg class="chart__svg" id="juros-svg" role="img" aria-labelledby="juros-svg-title"></svg>
+            <span class="sr-only" id="juros-svg-title"></span>
+            <div class="tooltip" id="juros-tooltip" role="status" hidden></div>
+          </div>
+        </article>
+
+        <p class="note" id="ji-note" hidden></p>
+
+        <details class="card breakdown" id="ji-breakdown">
+          <summary class="breakdown__summary">
+            <span>Detalhe mês a mês</span>
+            <span class="assumptions__caret" aria-hidden="true"></span>
+          </summary>
+          <div class="breakdown__scroll">
+            <table class="table" id="ji-table">
+              <thead id="ji-thead"></thead>
+              <tbody id="ji-tbody"></tbody>
+            </table>
+          </div>
+        </details>
+      </section>
+    </div>
+    <!-- ===================================================================
+         ABA 3: COMPARADOR DE RENDA FIXA
+         =================================================================== -->
+    <div class="view view--full" id="view-comparador" role="tabpanel" aria-labelledby="tab-comparador">
+      <form class="card compare-form" id="cmp-form" novalidate>
+        <header class="panel__head">
+          <h1 class="panel__title">Comparador de renda fixa</h1>
+          <p class="panel__hint">Compare dois investimentos lado a lado e veja qual rende mais depois do Imposto de Renda.</p>
+        </header>
+
+        <div class="compare-cols">
+          <fieldset class="compare-col">
+            <legend class="compare-col__legend">Investimento A</legend>
+            <div class="field">
+              <label class="field__label" for="cmp-a-type">Qual é o tipo de investimento?</label>
+              <select class="control select select--block" id="cmp-a-type">
+                <option value="cdb" selected>CDB</option>
+                <option value="lci">LCI</option>
+                <option value="lca">LCA</option>
+                <option value="tesouro_ipca">Tesouro IPCA+</option>
+                <option value="pre">Prefixado</option>
+              </select>
+            </div>
+            <div class="field">
+              <span class="field__label">A rentabilidade está em</span>
+              <div class="segmented" role="radiogroup" aria-label="Forma de rentabilidade do investimento A">
+                <label class="segment"><input type="radio" name="cmp-a-mode" value="pre"><span class="segment__face">pré-fixado</span></label>
+                <label class="segment"><input type="radio" name="cmp-a-mode" value="cdi" checked><span class="segment__face">% do CDI</span></label>
+                <label class="segment"><input type="radio" name="cmp-a-mode" value="ipca"><span class="segment__face">IPCA+</span></label>
+              </div>
+            </div>
+            <div class="field-row">
+              <div class="field">
+                <label class="field__label" for="cmp-a-rate">Rentabilidade</label>
+                <div class="affix-input">
+                  <span class="affix affix--prefix">%</span>
+                  <input class="control" id="cmp-a-rate" type="text" inputmode="decimal" autocomplete="off" value="108">
+                </div>
+                <p class="field__help" id="cmp-a-rate-help">percentual do CDI</p>
+              </div>
+              <div class="field">
+                <label class="field__label" for="cmp-a-months">Tempo (meses)</label>
+                <input class="control" id="cmp-a-months" type="number" min="1" max="600" step="1" value="36" aria-label="Tempo do investimento A em meses">
+              </div>
+            </div>
+          </fieldset>
+
+          <fieldset class="compare-col">
+            <legend class="compare-col__legend">Investimento B</legend>
+            <div class="field">
+              <label class="field__label" for="cmp-b-type">Você quer comparar com:</label>
+              <select class="control select select--block" id="cmp-b-type">
+                <option value="cdb">CDB</option>
+                <option value="lci">LCI</option>
+                <option value="lca" selected>LCA</option>
+                <option value="tesouro_ipca">Tesouro IPCA+</option>
+                <option value="pre">Prefixado</option>
+              </select>
+            </div>
+            <div class="field">
+              <span class="field__label">A rentabilidade está em</span>
+              <div class="segmented" role="radiogroup" aria-label="Forma de rentabilidade do investimento B">
+                <label class="segment"><input type="radio" name="cmp-b-mode" value="pre"><span class="segment__face">pré-fixado</span></label>
+                <label class="segment"><input type="radio" name="cmp-b-mode" value="cdi" checked><span class="segment__face">% do CDI</span></label>
+                <label class="segment"><input type="radio" name="cmp-b-mode" value="ipca"><span class="segment__face">IPCA+</span></label>
+              </div>
+            </div>
+            <div class="field-row">
+              <div class="field">
+                <label class="field__label" for="cmp-b-rate">Rentabilidade</label>
+                <div class="affix-input">
+                  <span class="affix affix--prefix">%</span>
+                  <input class="control" id="cmp-b-rate" type="text" inputmode="decimal" autocomplete="off" value="103">
+                </div>
+                <p class="field__help" id="cmp-b-rate-help">percentual do CDI</p>
+              </div>
+              <div class="field">
+                <label class="field__label" for="cmp-b-months">Tempo (meses)</label>
+                <input class="control" id="cmp-b-months" type="number" min="1" max="600" step="1" value="36" aria-label="Tempo do investimento B em meses">
+              </div>
+            </div>
+          </fieldset>
+        </div>
+
+        <div class="compare-foot">
+          <div class="compare-base">
+            <div class="field">
+              <label class="field__label" for="cmp-cdi">CDI ao ano</label>
+              <div class="affix-input">
+                <input class="control" id="cmp-cdi" type="text" inputmode="decimal" autocomplete="off" value="14,40">
+                <span class="affix affix--suffix">%</span>
+              </div>
+            </div>
+            <div class="field">
+              <label class="field__label" for="cmp-ipca">IPCA ao ano</label>
+              <div class="affix-input">
+                <input class="control" id="cmp-ipca" type="text" inputmode="decimal" autocomplete="off" value="4,50">
+                <span class="affix affix--suffix">%</span>
+              </div>
+            </div>
+          </div>
+          <button type="submit" class="btn btn--primary" id="cmp-calc">Calcular</button>
+        </div>
+        <p class="base-note" id="cmp-base"></p>
+      </form>
+
+      <div class="verdict" id="cmp-verdict" role="status"></div>
+
+      <div class="compare-results">
+        <article class="result-card" id="cmp-card-a">
+          <header class="result-card__head" id="cmp-a-title">CDB</header>
+          <div class="result-card__body">
+            <div class="result-line result-line--hero">
+              <span class="result-line__label">Rentabilidade líquida</span>
+              <strong class="result-line__value" id="cmp-a-net">0%</strong>
+              <span class="result-line__sub" id="cmp-a-sub"></span>
+            </div>
+            <dl class="result-meta">
+              <div><dt>Rentabilidade bruta</dt><dd id="cmp-a-gross">0% a.a.</dd></div>
+              <div><dt>Período</dt><dd id="cmp-a-period">0 meses</dd></div>
+            </dl>
+            <span class="prazo-badge" id="cmp-a-prazo"></span>
+            <div class="ir-box" id="cmp-a-ir"></div>
+          </div>
+        </article>
+
+        <article class="result-card" id="cmp-card-b">
+          <header class="result-card__head" id="cmp-b-title">LCA</header>
+          <div class="result-card__body">
+            <div class="result-line result-line--hero">
+              <span class="result-line__label">Rentabilidade líquida</span>
+              <strong class="result-line__value" id="cmp-b-net">0%</strong>
+              <span class="result-line__sub" id="cmp-b-sub"></span>
+            </div>
+            <dl class="result-meta">
+              <div><dt>Rentabilidade bruta</dt><dd id="cmp-b-gross">0% a.a.</dd></div>
+              <div><dt>Período</dt><dd id="cmp-b-period">0 meses</dd></div>
+            </dl>
+            <span class="prazo-badge" id="cmp-b-prazo"></span>
+            <div class="ir-box" id="cmp-b-ir"></div>
+          </div>
+        </article>
+      </div>
+    </div>
+  </main>
+
+  <footer class="app-footer">
+    <p>
+      Simulações educativas, não são recomendação de investimento. A aba Renda Fixa aplica juros compostos,
+      a tabela regressiva de IR, o IOF dos primeiros 30 dias e a isenção de LCI/LCA conforme as regras vigentes.
+      A aba Juros Compostos projeta o crescimento com aportes ou retiradas e não considera impostos.
+      Os resultados dependem das taxas informadas e não representam garantia de rentabilidade.
+    </p>
+  </footer>
+
+  <script src="script.js" defer></script>
+</body>
+</html>
