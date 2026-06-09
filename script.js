@@ -1184,13 +1184,302 @@
     recalc();
   }
 
+  /* ----------------------- acoes x renda fixa -------------------------- */
+
+  var MONTHS_PT = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
+  function monthYear(l) { return MONTHS_PT[l.month - 1] + '/' + l.year; }
+
+  // Grafico de duas linhas independentes (acao x renda fixa), eixo X em anos.
+  function createDualLineChart(container, tooltip, titleEl) {
+    var geo = null, model = null, hoverLine, dotA, dotB;
+    var svg = container.querySelector('.chart__svg');
+
+    function lineD(pts) {
+      var d = '';
+      for (var i = 0; i < pts.length; i++) d += (i ? 'L' : 'M') + pts[i][0].toFixed(2) + ' ' + pts[i][1].toFixed(2) + ' ';
+      return d;
+    }
+    function niceMax(v) {
+      if (v <= 0) return 1;
+      var mag = Math.pow(10, Math.floor(Math.log10(v)));
+      var nr = v / mag, s = nr <= 1 ? 1 : nr <= 2 ? 2 : nr <= 2.5 ? 2.5 : nr <= 5 ? 5 : 10;
+      return s * mag;
+    }
+
+    function render() {
+      if (!model) return;
+      var w = container.clientWidth || 600, h = container.clientHeight || 260;
+      var pad = { top: 16, right: 14, bottom: 26, left: 64 };
+      var plotW = Math.max(10, w - pad.left - pad.right), plotH = Math.max(10, h - pad.top - pad.bottom);
+      var n = model.a.length, baseY = pad.top + plotH;
+
+      var mx = 1;
+      for (var k = 0; k < n; k++) { if (model.a[k] > mx) mx = model.a[k]; if (model.b[k] > mx) mx = model.b[k]; }
+      var maxVal = niceMax(mx);
+
+      function xAt(i) { return pad.left + (n <= 1 ? plotW / 2 : (i / (n - 1)) * plotW); }
+      function yAt(v) { return pad.top + plotH - (v / maxVal) * plotH; }
+
+      var aPts = [], bPts = [];
+      for (var i = 0; i < n; i++) { aPts.push([xAt(i), yAt(model.a[i])]); bPts.push([xAt(i), yAt(model.b[i])]); }
+
+      var grid = '', steps = 4;
+      for (var g = 0; g <= steps; g++) {
+        var val = maxVal * g / steps, gy = yAt(val);
+        grid += '<line class="chart-grid-line" x1="' + pad.left + '" y1="' + gy.toFixed(1) + '" x2="' + (w - pad.right) + '" y2="' + gy.toFixed(1) + '"></line>';
+        grid += '<text class="chart-ylabel" x="' + (pad.left - 8) + '" y="' + (gy + 4).toFixed(1) + '" text-anchor="end">' + compactBRL(val) + '</text>';
+      }
+
+      var xticks = '', lastY = null;
+      var spanY = model.labels[n - 1].year - model.labels[0].year;
+      var stepY = Math.max(1, Math.ceil((spanY + 1) / 8));
+      for (var t = 0; t < n; t++) {
+        var L = model.labels[t];
+        if (L.month === 1 || t === 0) {
+          if (lastY === null || L.year - lastY >= stepY) {
+            xticks += '<text class="chart-ylabel" x="' + xAt(t).toFixed(1) + '" y="' + (h - 6) + '" text-anchor="middle">' + L.year + '</text>';
+            lastY = L.year;
+          }
+        }
+      }
+
+      svg.setAttribute('viewBox', '0 0 ' + w + ' ' + h);
+      svg.innerHTML = grid +
+        '<path class="line-principal" d="' + lineD(bPts) + '"></path>' +
+        '<path class="line-total" d="' + lineD(aPts) + '"></path>' +
+        xticks +
+        '<g class="hover-layer" hidden>' +
+          '<line class="chart-cursor" y1="' + pad.top + '" y2="' + baseY + '"></line>' +
+          '<circle class="chart-dot chart-dot--principal" r="4"></circle>' +
+          '<circle class="chart-dot chart-dot--total" r="4.5"></circle>' +
+        '</g>';
+
+      var hl = svg.querySelector('.hover-layer');
+      hoverLine = hl.querySelector('.chart-cursor');
+      dotB = hl.querySelector('.chart-dot--principal');
+      dotA = hl.querySelector('.chart-dot--total');
+      geo = { pad: pad, plotW: plotW, n: n, xAt: xAt, yAt: yAt, a: model.a, b: model.b, hl: hl };
+
+      if (!reduceMotion) {
+        ['.line-total', '.line-principal'].forEach(function (sel) {
+          var ln = svg.querySelector(sel), len = ln.getTotalLength();
+          ln.style.transition = 'none'; ln.style.strokeDasharray = len; ln.style.strokeDashoffset = len;
+          void ln.getBoundingClientRect();
+          ln.style.transition = 'stroke-dashoffset 0.9s cubic-bezier(0.16,1,0.3,1)';
+          ln.style.strokeDashoffset = '0';
+        });
+      }
+      if (titleEl) titleEl.textContent = model.title || '';
+    }
+
+    function showHoverAt(cx) {
+      if (!geo) return;
+      var rect = container.getBoundingClientRect();
+      var rel = (cx - rect.left - geo.pad.left) / geo.plotW;
+      var i = clamp(Math.round(rel * (geo.n - 1)), 0, geo.n - 1);
+      var x = geo.xAt(i);
+      geo.hl.removeAttribute('hidden');
+      hoverLine.setAttribute('x1', x); hoverLine.setAttribute('x2', x);
+      dotA.setAttribute('cx', x); dotA.setAttribute('cy', geo.yAt(geo.a[i]));
+      dotB.setAttribute('cx', x); dotB.setAttribute('cy', geo.yAt(geo.b[i]));
+      tooltip.innerHTML = '<div class="tooltip__title">' + monthYear(model.labels[i]) + '</div>' +
+        '<div class="tooltip__row"><span><span class="dot dot--yield"></span>' + model.aLabel + '</span><span>' + brl(geo.a[i]) + '</span></div>' +
+        '<div class="tooltip__row"><span><span class="dot dot--principal"></span>' + model.bLabel + '</span><span>' + brl(geo.b[i]) + '</span></div>';
+      tooltip.hidden = false;
+      var tw = tooltip.offsetWidth;
+      tooltip.style.left = clamp(x, tw / 2 + 4, rect.width - tw / 2 - 4) + 'px';
+      tooltip.style.top = geo.yAt(Math.max(geo.a[i], geo.b[i])) + 'px';
+    }
+    function hideHover() { tooltip.hidden = true; if (geo && geo.hl) geo.hl.setAttribute('hidden', ''); }
+
+    container.addEventListener('pointermove', function (e) { showHoverAt(e.clientX); });
+    container.addEventListener('pointerleave', hideHover);
+    var ro = new ResizeObserver(debounce(function () { render(); }, 120));
+    ro.observe(container);
+    return { update: function (m) { model = m; render(); } };
+  }
+
+  function setupAcoes() {
+    var A = {
+      form: $('acoes-form'), ticker: $('ac-ticker'), start: $('ac-start'), end: $('ac-end'),
+      initial: $('ac-initial'), rate: $('ac-rate'), token: $('ac-token'), calc: $('ac-calc'),
+      state: $('ac-state'), output: $('ac-output'),
+      mStock: $('ac-m-stock'), mStockFoot: $('ac-m-stock-foot'),
+      mRf: $('ac-m-rf'), mRfFoot: $('ac-m-rf-foot'),
+      mDiff: $('ac-m-diff'), mDiffLabel: $('ac-m-diff-label'), mDiffFoot: $('ac-m-diff-foot'),
+      legend: $('ac-legend'), chartTitle: $('ac-chart-title'), chartSub: $('ac-chart-sub'),
+      note: $('ac-note'),
+      bdPeriod: $('ac-bd-period'), bdInvested: $('ac-bd-invested'), bdPrice: $('ac-bd-price'),
+      bdPriceVal: $('ac-bd-priceval'), bdDiv: $('ac-bd-div'), bdTotal: $('ac-bd-total')
+    };
+    var chart = createDualLineChart($('acoes-chart'), $('acoes-tooltip'), $('acoes-svg-title'));
+    var TOKEN_KEY = 'capitaliza-brapi-token';
+    try { var saved = localStorage.getItem(TOKEN_KEY); if (saved) A.token.value = saved; } catch (e) { /* ignora */ }
+
+    function legendItem(cls, label) {
+      return '<span class="legend__item"><span class="legend__swatch legend__swatch--' + cls + '"></span>' + label + '</span>';
+    }
+    function showState(html, kind) {
+      A.output.hidden = true;
+      A.state.hidden = false;
+      A.state.className = 'ac-state' + (kind ? ' ac-state--' + kind : '');
+      A.state.innerHTML = html;
+    }
+
+    // No plano gratuito da brapi, o historico completo vem sem token para estas.
+    var FREE_TICKERS = 'PETR4, MGLU3, VALE3 e ITUB4';
+
+    async function fetchBrapi(ticker, token) {
+      var url = 'https://brapi.dev/api/quote/' + encodeURIComponent(ticker) + '?range=max&interval=1mo';
+      if (token) url += '&token=' + encodeURIComponent(token);
+      var res;
+      try { res = await fetch(url); } catch (e) { throw { kind: 'network' }; }
+      var data = null;
+      try { data = await res.json(); } catch (e) { /* corpo nao-JSON */ }
+      var msg = data && (data.message || (typeof data.error === 'string' ? data.error : null));
+      if (!res.ok || (data && data.error)) {
+        if (res.status === 401 || res.status === 403) throw { kind: 'token', msg: msg };
+        if (res.status === 404) throw { kind: 'notfound', msg: msg };
+        if (res.status === 402) throw { kind: 'plan', msg: msg };
+        if (res.status === 400) throw { kind: 'badrequest', msg: msg };
+        throw { kind: 'http', status: res.status, msg: msg };
+      }
+      var r = data && data.results && data.results[0];
+      if (!r || !r.historicalDataPrice || !r.historicalDataPrice.length) throw { kind: 'nodata' };
+      return r;
+    }
+
+    function errorMessage(err) {
+      var k = err && err.kind;
+      var extra = err && err.msg ? ' <span class="ac-apimsg">(' + err.msg + ')</span>' : '';
+      var freeHint = ' No plano gratuito, o histórico completo vem sem token para <strong>' + FREE_TICKERS +
+        '</strong>. Outras ações, como BBAS3, exigem um plano pago da brapi.dev.';
+      if (k === 'token') return '<strong>Token ausente ou inválido.</strong>' + extra + freeHint;
+      if (k === 'notfound') return '<strong>Ação não encontrada.</strong> Confira o código (exemplos: PETR4, ITUB4, VALE3).' + extra;
+      if (k === 'plan' || k === 'badrequest') return '<strong>Seu plano da brapi não cobre esta ação.</strong>' + extra + freeHint;
+      if (k === 'period') return '<strong>Sem dados suficientes</strong> para o período informado nesta ação. Tente um intervalo maior.';
+      if (k === 'network') return '<strong>Falha de conexão com o brapi.dev.</strong> Verifique a internet. Se abriu o arquivo direto (file://), o navegador pode bloquear a requisição: sirva por um servidor local (ex.: <code>python3 -m http.server</code>).';
+      return '<strong>Erro ao consultar a API.</strong> Tente novamente em instantes' + (err && err.status ? ' (status ' + err.status + ')' : '') + '.' + extra;
+    }
+
+    function computeComparison(r, startY, endY, initial, ratePct) {
+      var hist = r.historicalDataPrice
+        .filter(function (p) { return p && p.date && p.close > 0; })
+        .sort(function (a, b) { return a.date - b.date; });
+      var pts = hist.filter(function (p) {
+        var y = new Date(p.date * 1000).getUTCFullYear();
+        return y >= startY && y <= endY;
+      });
+      if (pts.length < 2) throw { kind: 'period' };
+
+      var adj = pts.map(function (p) { return (p.adjustedClose && p.adjustedClose > 0) ? p.adjustedClose : p.close; });
+      var n = pts.length;
+      var startClose = pts[0].close, endClose = pts[n - 1].close;
+      var startAdj = adj[0], endAdj = adj[n - 1];
+      var im = Math.pow(1 + ratePct / 100, 1 / 12) - 1;
+
+      var stockSeries = new Array(n), rfSeries = new Array(n), labels = new Array(n);
+      for (var i = 0; i < n; i++) {
+        stockSeries[i] = initial * (adj[i] / startAdj);
+        rfSeries[i] = initial * Math.pow(1 + im, i);
+        var d = new Date(pts[i].date * 1000);
+        labels[i] = { year: d.getUTCFullYear(), month: d.getUTCMonth() + 1 };
+      }
+      var stockFinal = initial * (endAdj / startAdj);
+      var priceFinal = initial * (endClose / startClose);
+      var rfFinal = initial * Math.pow(1 + im, n - 1);
+
+      return {
+        labels: labels, stockSeries: stockSeries, rfSeries: rfSeries,
+        stockFinal: stockFinal, priceFinal: priceFinal, rfFinal: rfFinal,
+        startClose: startClose, endClose: endClose,
+        totalReturn: endAdj / startAdj - 1, priceReturn: endClose / startClose - 1, rfReturn: rfFinal / initial - 1,
+        dividendGain: stockFinal - priceFinal,
+        startLabel: labels[0], endLabel: labels[n - 1],
+        availFromYear: new Date(hist[0].date * 1000).getUTCFullYear(), reqStartYear: startY
+      };
+    }
+
+    function renderResult(c, ticker, initial) {
+      A.state.hidden = true;
+      A.output.hidden = false;
+
+      var stockWins = c.stockFinal >= c.rfFinal;
+      animateValue(A.mStock, c.stockFinal, brl);
+      animateValue(A.mRf, c.rfFinal, brl);
+      animateValue(A.mDiff, Math.abs(c.stockFinal - c.rfFinal), brl);
+      A.mStockFoot.textContent = 'rentabilidade total ' + pct(c.totalReturn * 100, 1);
+      A.mRfFoot.textContent = 'rentabilidade ' + pct(c.rfReturn * 100, 1);
+      A.mDiffLabel.textContent = stockWins ? 'Ação rendeu mais' : 'Renda fixa rendeu mais';
+      A.mDiffFoot.textContent = (stockWins ? ticker : 'a renda fixa') + ' no período';
+
+      A.legend.innerHTML = legendItem('yield', ticker + ' (com dividendos)') + legendItem('principal', 'Renda fixa');
+      A.chartSub.textContent = 'Valor de ' + brl(initial) + ' investido no início, ' + monthYear(c.startLabel) + ' a ' + monthYear(c.endLabel) + '.';
+      chart.update({
+        a: c.stockSeries, b: c.rfSeries, labels: c.labels,
+        aLabel: ticker, bLabel: 'Renda fixa',
+        title: 'Comparação de ' + ticker + ' (dividendos reinvestidos) com a renda fixa de ' + monthYear(c.startLabel) + ' a ' + monthYear(c.endLabel) + '.'
+      });
+
+      A.bdPeriod.textContent = monthYear(c.startLabel) + ' a ' + monthYear(c.endLabel);
+      A.bdInvested.textContent = brl(initial);
+      A.bdPrice.textContent = 'de ' + brl(c.startClose) + ' a ' + brl(c.endClose) + ' (' + pct(c.priceReturn * 100, 1) + ')';
+      A.bdPriceVal.textContent = brl(c.priceFinal);
+      A.bdDiv.textContent = '+ ' + brl(c.dividendGain);
+      A.bdTotal.textContent = brl(c.stockFinal) + ' (' + pct(c.totalReturn * 100, 1) + ')';
+
+      var warn = c.availFromYear > c.reqStartYear
+        ? '<strong>Atenção:</strong> os dados desta ação começam em ' + c.availFromYear + ', então o período foi ajustado. '
+        : '';
+      A.note.innerHTML = warn +
+        'A rentabilidade total usa o preço ajustado, que equivale a reinvestir todos os dividendos em novas ações e corrige desdobramentos. ' +
+        'A comparação é bruta: o Tesouro paga IR regressivo no resgate (15% após 2 anos) e ações têm regras próprias de imposto. ' +
+        'A taxa de renda fixa é considerada constante, uma simplificação. Dados: brapi.dev.';
+
+      el.live.textContent = 'Comparação ' + ticker + ': ação ' + brl(c.stockFinal) + ', renda fixa ' + brl(c.rfFinal) + '.';
+    }
+
+    async function run() {
+      var ticker = (A.ticker.value || '').trim().toUpperCase();
+      var token = (A.token.value || '').trim();
+      var startY = clamp(Math.round(+A.start.value || 2010), 1990, 2100);
+      var endY = clamp(Math.round(+A.end.value || 2020), 1990, 2100);
+      var initial = readMoney(A.initial);
+      var rate = readDecimal(A.rate); if (isNaN(rate)) rate = 0; rate = Math.max(0, rate);
+
+      if (!ticker) { showState('Informe o código da ação (exemplo: PETR4).', 'error'); return; }
+      if (endY < startY) { showState('O ano final deve ser maior ou igual ao inicial.', 'error'); return; }
+      if (initial <= 0) { showState('Informe um valor investido maior que zero.', 'error'); return; }
+      if (token) { try { localStorage.setItem(TOKEN_KEY, token); } catch (e) { /* ignora */ } }
+
+      A.calc.disabled = true;
+      var prevLabel = A.calc.textContent;
+      A.calc.textContent = 'Buscando...';
+      showState('<div class="ac-loading"><span class="ac-spin" aria-hidden="true"></span>Buscando histórico de ' + ticker + ' no brapi.dev...</div>', 'loading');
+      try {
+        var r = await fetchBrapi(ticker, token);
+        renderResult(computeComparison(r, startY, endY, initial, rate), ticker, initial);
+      } catch (err) {
+        showState(errorMessage(err), 'error');
+      } finally {
+        A.calc.disabled = false;
+        A.calc.textContent = prevLabel;
+      }
+    }
+
+    A.form.addEventListener('submit', function (e) { e.preventDefault(); run(); });
+    A.initial.addEventListener('input', function () { maskMoney(A.initial); });
+    A.initial.addEventListener('blur', function () { maskMoney(A.initial); });
+  }
+
   /* ----------------------------- abas ---------------------------------- */
 
   function setupTabs() {
     var defs = [
       { tab: 'tab-rendafixa', view: 'view-rendafixa' },
       { tab: 'tab-juros', view: 'view-juros' },
-      { tab: 'tab-comparador', view: 'view-comparador' }
+      { tab: 'tab-comparador', view: 'view-comparador' },
+      { tab: 'tab-acoes', view: 'view-acoes' }
     ];
     var tabs = defs.map(function (d) { return $(d.tab); });
 
@@ -1230,6 +1519,7 @@
     recalc();
     setupJuros();
     setupComparador();
+    setupAcoes();
     setupTabs();
   }
 

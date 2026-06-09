@@ -37,6 +37,7 @@
     <button type="button" class="tab is-active" id="tab-rendafixa" role="tab" aria-selected="true" aria-controls="view-rendafixa">Renda Fixa</button>
     <button type="button" class="tab" id="tab-juros" role="tab" aria-selected="false" aria-controls="view-juros" tabindex="-1">Juros Compostos</button>
     <button type="button" class="tab" id="tab-comparador" role="tab" aria-selected="false" aria-controls="view-comparador" tabindex="-1">Comparador</button>
+    <button type="button" class="tab" id="tab-acoes" role="tab" aria-selected="false" aria-controls="view-acoes" tabindex="-1">Ações x RF</button>
   </nav>
 
   <main id="main">
@@ -520,6 +521,125 @@
           </div>
         </article>
       </div>
+    </div>
+    <!-- ===================================================================
+         ABA 4: ACOES x RENDA FIXA
+         =================================================================== -->
+    <div class="view layout" id="view-acoes" role="tabpanel" aria-labelledby="tab-acoes">
+
+      <form class="panel" id="acoes-form" novalidate>
+        <header class="panel__head">
+          <h1 class="panel__title">Ações x Renda Fixa</h1>
+          <p class="panel__hint">Compare uma ação, com todos os dividendos reinvestidos em novas ações, com a renda fixa no mesmo período.</p>
+        </header>
+
+        <div class="field">
+          <label class="field__label" for="ac-ticker">Código da ação</label>
+          <input class="control" id="ac-ticker" type="text" autocomplete="off" value="ITUB4" placeholder="ITUB4">
+          <p class="field__help">No plano gratuito da brapi funcionam sem token: <strong>PETR4, MGLU3, VALE3 e ITUB4</strong>. Outras ações (como BBAS3) exigem token de um plano pago.</p>
+        </div>
+
+        <div class="field-row">
+          <div class="field">
+            <label class="field__label" for="ac-start">Ano inicial</label>
+            <input class="control" id="ac-start" type="number" min="1995" max="2026" step="1" value="2010">
+          </div>
+          <div class="field">
+            <label class="field__label" for="ac-end">Ano final</label>
+            <input class="control" id="ac-end" type="number" min="1995" max="2026" step="1" value="2020">
+          </div>
+        </div>
+
+        <div class="field">
+          <label class="field__label" for="ac-initial">Valor investido</label>
+          <div class="affix-input">
+            <span class="affix affix--prefix">R$</span>
+            <input class="control control--money" id="ac-initial" type="text" inputmode="numeric" autocomplete="off" value="10.000,00">
+          </div>
+        </div>
+
+        <div class="field">
+          <label class="field__label" for="ac-rate">Renda fixa (taxa ao ano)</label>
+          <div class="affix-input">
+            <span class="affix affix--prefix">%</span>
+            <input class="control" id="ac-rate" type="text" inputmode="decimal" autocomplete="off" value="9,5">
+          </div>
+          <p class="field__help">Taxa média da renda fixa no período (ex.: CDI médio). Aproximação por taxa constante.</p>
+        </div>
+
+        <details class="assumptions">
+          <summary class="assumptions__summary">
+            <span>Token brapi.dev</span>
+            <span class="assumptions__caret" aria-hidden="true"></span>
+          </summary>
+          <div class="assumptions__body">
+            <div class="field">
+              <label class="field__label" for="ac-token">Token</label>
+              <input class="control" id="ac-token" type="password" autocomplete="off" placeholder="cole seu token aqui">
+              <p class="field__help">Necessário apenas para ações fora das 4 gratuitas (requer plano pago da brapi.dev). Fica salvo apenas no seu navegador.</p>
+            </div>
+          </div>
+        </details>
+
+        <div class="actions">
+          <button type="submit" class="btn btn--primary" id="ac-calc">Comparar</button>
+        </div>
+      </form>
+
+      <section class="results" aria-label="Resultado da comparação">
+        <div class="ac-state" id="ac-state">
+          Escolha a ação e clique em <strong>Comparar</strong>. As ações PETR4, MGLU3, VALE3 e ITUB4 funcionam sem token.
+        </div>
+
+        <div id="ac-output" hidden>
+          <div class="metrics">
+            <article class="metric metric--primary">
+              <span class="metric__label">Ação com dividendos</span>
+              <strong class="metric__value" id="ac-m-stock">R$ 0,00</strong>
+              <span class="metric__foot" id="ac-m-stock-foot"></span>
+            </article>
+            <article class="metric">
+              <span class="metric__label">Renda fixa</span>
+              <strong class="metric__value" id="ac-m-rf">R$ 0,00</strong>
+              <span class="metric__foot" id="ac-m-rf-foot"></span>
+            </article>
+            <article class="metric">
+              <span class="metric__label" id="ac-m-diff-label">Diferença</span>
+              <strong class="metric__value metric__value--accent" id="ac-m-diff">R$ 0,00</strong>
+              <span class="metric__foot" id="ac-m-diff-foot"></span>
+            </article>
+          </div>
+
+          <article class="card chart-card">
+            <header class="card__head card__head--stack">
+              <h2 class="card__title" id="ac-chart-title">Evolução do investimento</h2>
+              <p class="card__sub" id="ac-chart-sub"></p>
+            </header>
+            <div class="legend" id="ac-legend"></div>
+            <div class="chart" id="acoes-chart">
+              <svg class="chart__svg" id="acoes-svg" role="img" aria-labelledby="acoes-svg-title"></svg>
+              <span class="sr-only" id="acoes-svg-title"></span>
+              <div class="tooltip" id="acoes-tooltip" role="status" hidden></div>
+            </div>
+          </article>
+
+          <article class="card">
+            <header class="card__head card__head--stack">
+              <h2 class="card__title">Detalhe da ação</h2>
+            </header>
+            <dl class="ledger">
+              <div class="ledger__row"><dt>Período</dt><dd id="ac-bd-period"></dd></div>
+              <div class="ledger__row"><dt>Valor investido</dt><dd id="ac-bd-invested"></dd></div>
+              <div class="ledger__row"><dt>Preço da ação (início e fim)</dt><dd id="ac-bd-price"></dd></div>
+              <div class="ledger__row"><dt>Valor só com a valorização do preço</dt><dd id="ac-bd-priceval"></dd></div>
+              <div class="ledger__row"><dt>Ganho com dividendos reinvestidos</dt><dd id="ac-bd-div"></dd></div>
+              <div class="ledger__row ledger__row--total"><dt>Valor final da ação</dt><dd id="ac-bd-total"></dd></div>
+            </dl>
+          </article>
+
+          <p class="note" id="ac-note"></p>
+        </div>
+      </section>
     </div>
   </main>
 

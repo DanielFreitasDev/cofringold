@@ -1,6 +1,6 @@
 # Capitaliza · Simuladores de Investimento
 
-Aplicação web com três calculadoras de investimento, organizadas em abas e com
+Aplicação web com quatro calculadoras de investimento, organizadas em abas e com
 um design único (tema claro e escuro, gráficos em SVG feitos à mão):
 
 1. **Renda Fixa**: simula CDB, LCI, LCA, Tesouro IPCA+ ou Prefixado com juros
@@ -9,6 +9,8 @@ um design único (tema claro e escuro, gráficos em SVG feitos à mão):
    retiradas mensais, em juros compostos ou simples.
 3. **Comparador**: coloca dois investimentos lado a lado e mostra qual rende mais
    depois do Imposto de Renda.
+4. **Ações x Renda Fixa**: compara uma ação da B3 (com dividendos reinvestidos),
+   usando dados históricos reais, com a renda fixa no mesmo período.
 
 > Aplicação educativa. Não é recomendação de investimento.
 
@@ -19,7 +21,7 @@ um design único (tema claro e escuro, gráficos em SVG feitos à mão):
 A maioria das calculadoras de renda fixa ignora o detalhe que mais muda o
 resultado: a **tributação**. Um CDB de 110% do CDI pode render menos, no
 líquido, do que uma LCI de 98% do CDI, porque a LCI é isenta de Imposto de
-Renda. O objetivo do Capitaliza é deixar isso visível, em três ferramentas que
+Renda. O objetivo do Capitaliza é deixar isso visível, em ferramentas que
 respondem perguntas diferentes:
 
 - **Renda Fixa**: para um cenário de aportes e prazo, quanto você terá ao final
@@ -27,6 +29,8 @@ respondem perguntas diferentes:
 - **Juros Compostos**: como um valor cresce com aportes, ou por quanto tempo um
   patrimônio sustenta retiradas mensais.
 - **Comparador**: entre dois papéis, qual entrega a maior rentabilidade líquida.
+- **Ações x Renda Fixa**: se você tivesse comprado uma ação em vez de renda fixa
+  no mesmo período, reinvestindo todos os dividendos, qual teria rendido mais.
 
 ---
 
@@ -65,6 +69,17 @@ respondem perguntas diferentes:
   rende mais e por quantos pontos percentuais ao ano.
 - Classificação de prazo (curto, médio, longo) e alíquota de IR ou isenção.
 
+### Aba Ações x Renda Fixa
+
+- Você informa o **código da ação** (ex.: BBAS3), o período (anos) e o valor
+  investido; o app busca o **histórico real** de preços na API da brapi.dev.
+- A ação é modelada com **todos os dividendos reinvestidos** em novas ações
+  (usa o preço ajustado, que também corrige desdobramentos).
+- Compara com a renda fixa no mesmo período e mostra qual teria rendido mais,
+  com gráfico das duas curvas e o detalhe do ganho vindo dos dividendos.
+- Estados completos de **carregando, erro e resultado**; o token da brapi.dev
+  fica salvo apenas no navegador (`localStorage`).
+
 ### Comuns a todas
 
 - **Tema claro e escuro** com preferência salva no navegador.
@@ -87,9 +102,9 @@ Cada camada fica em um único arquivo. O escopo não justifica dividir em módul
 separados, e o arquivo único facilita abrir a página sem servidor (ver abaixo).
 Internamente, o `script.js` é organizado em blocos com responsabilidade clara:
 `config` (dados dos papéis e tabelas), `format` (formatadores pt-BR),
-`finance` (motor de simulação), `charts` (gráfico SVG reutilizável) e, por
-funcionalidade, `renda fixa`, `juros compostos`, `comparador` e `abas`, além do
-controle de `tema`.
+`finance` (motor de simulação), `charts` (gráficos SVG reutilizáveis) e, por
+funcionalidade, `renda fixa`, `juros compostos`, `comparador`, `ações x RF`
+(com busca de dados na brapi.dev) e `abas`, além do controle de `tema`.
 
 ---
 
@@ -98,11 +113,14 @@ controle de `tema`.
 - **HTML5** semântico (`header`, `main`, `section`, `form`, `fieldset`, `table`).
 - **CSS3** puro: variáveis para temas, Grid, Flexbox, `:has()`, `color-mix()`,
   `backdrop-filter` e media queries (`prefers-color-scheme`, `prefers-reduced-motion`).
-- **JavaScript** moderno, sem dependências: `Intl.NumberFormat` para moeda e
-  porcentagem em pt-BR, SVG construído via script para os gráficos,
-  `ResizeObserver` para o gráfico responsivo e `localStorage` para o tema.
+- **JavaScript** moderno, sem dependências de build: `Intl.NumberFormat` para
+  moeda e porcentagem em pt-BR, SVG construído via script para os gráficos,
+  `ResizeObserver` para o gráfico responsivo, `localStorage` para o tema e o
+  token, e `fetch` para a API pública da brapi.dev na aba Ações x RF.
 
-Sem frameworks, bibliotecas, CDNs ou etapa de build. Tudo roda no navegador.
+Sem frameworks, bibliotecas ou etapa de build. A única chamada externa é a API
+de cotações da brapi.dev, usada apenas na aba Ações x Renda Fixa (as outras três
+abas funcionam totalmente offline).
 
 ---
 
@@ -160,6 +178,20 @@ Use as **abas** no topo para alternar entre as três calculadoras.
 2. Ajuste o CDI e o IPCA base, se quiser, e clique em **Calcular**.
 3. Leia o veredito e os dois cartões com a rentabilidade líquida de cada um.
 
+### Ações x Renda Fixa
+
+1. Informe o **código da ação**, o ano inicial e final, o valor investido e a
+   taxa média da renda fixa do período. As ações **PETR4, MGLU3, VALE3 e ITUB4**
+   funcionam sem token no plano gratuito da brapi.
+2. Para outras ações (como **BBAS3**), o histórico exige um **plano pago** da
+   brapi: crie o token, abra a seção "Token brapi.dev" e cole (fica salvo no
+   navegador). Sem o plano correto, a brapi recusa a ação e o app avisa.
+3. Clique em **Comparar**. O app busca o histórico, reinveste os dividendos e
+   mostra qual teria rendido mais, com o gráfico das duas curvas.
+
+> Observação: abrir o `index.html` direto (`file://`) costuma funcionar, mas se
+> o navegador bloquear a requisição, sirva por um servidor local (ver abaixo).
+
 O **tema** claro/escuro fica no botão do canto superior direito, e vale para
 todas as abas.
 
@@ -177,6 +209,8 @@ Abra o `index.html` e confirme cada comportamento:
 | Juros Compostos | R$ 1.000 + R$ 100/mês, 14,79% ao ano, 12 anos | Valor final perto de R$ 41.859,40, juros R$ 26.459,40 |
 | Juros Compostos | Modo Retirar com retirada maior que os juros | Aviso do mês em que o saldo se esgota |
 | Comparador | CDB 108% do CDI x LCA 103% do CDI, 36 meses | CDB 91,80% do CDI líquido, LCA 103%; veredito: LCA rende mais |
+| Ações x RF | PETR4, 2010 a 2020, sem token | Mostra valor final da ação (dividendos reinvestidos), da renda fixa e o vencedor, com gráfico (no período, a renda fixa vence a PETR4) |
+| Ações x RF | BBAS3 sem plano pago, ou ação inexistente | Mensagem de erro clara com a explicação da brapi, sem travar a página |
 | Todas | Deixar campos numéricos em branco | Tudo zera sem erro (sem `NaN`) |
 | Todas | Alternar o tema e recarregar a página | A preferência de tema é mantida |
 
